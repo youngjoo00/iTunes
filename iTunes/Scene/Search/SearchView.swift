@@ -10,19 +10,39 @@ import Then
 
 final class SearchView: BaseView {
     
-    let titleLabel = UILabel().then {
-        $0.text = "검색"
+    let searchController = UISearchController(searchResultsController: nil).then {
+        $0.searchBar.placeholder = "게임, 앱, 스토리 등"
+    }
+    
+    let searchTableView = UITableView().then {
+        $0.register(SearchTableViewCell.self, forCellReuseIdentifier: SearchTableViewCell.identifier)
+        $0.backgroundColor = .clear
+        $0.rowHeight = UITableView.automaticDimension
+        $0.estimatedRowHeight = 44
+        $0.separatorStyle = .none
+    }
+    
+    let recentTableView = UITableView().then {
+        $0.register(RecentTableViewCell.self, forCellReuseIdentifier: RecentTableViewCell.identifier)
+        $0.estimatedRowHeight = 44
+        $0.backgroundColor = .clear
     }
     
     override func configureHierarchy() {
         [
-            titleLabel
+            searchTableView,
+            recentTableView,
         ].forEach { addSubview($0) }
     }
     
     override func configureLayout() {
-        titleLabel.snp.makeConstraints { make in
-            make.top.equalTo(safeAreaLayoutGuide).offset(20)
+        
+        recentTableView.snp.makeConstraints { make in
+            make.edges.equalTo(safeAreaLayoutGuide)
+        }
+        
+        searchTableView.snp.makeConstraints { make in
+            make.edges.equalTo(safeAreaLayoutGuide)
         }
     }
     
