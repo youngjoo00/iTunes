@@ -12,6 +12,15 @@ import RxCocoa
 final class SearchViewModel: CommonViewModel {
     
     var disposeBag = DisposeBag()
+    var repository: AppInfoRepository?
+    
+    init() {
+        do {
+            repository = try AppInfoRepository()
+        } catch {
+            print("초기화 에러")
+        }
+    }
     
     let recentCellDeleteButtonTap = PublishRelay<Int>()
     
@@ -21,6 +30,7 @@ final class SearchViewModel: CommonViewModel {
         let searchTextDidBeginEditing: ControlEvent<Void>
         let searchTextDidEndEditing: ControlEvent<Void>
         let recentCellTap: ControlEvent<String>
+        let appData: PublishSubject<AppResult>
     }
     
     struct Output {
@@ -28,6 +38,7 @@ final class SearchViewModel: CommonViewModel {
         let recentList: BehaviorRelay<[String]>
         let searchEditingState: BehaviorRelay<Bool>
         let searchText: PublishRelay<String>
+        let errorMessage: PublishRelay<String>
     }
     
     func transform(input: Input) -> Output {
@@ -36,16 +47,22 @@ final class SearchViewModel: CommonViewModel {
         let recentList = BehaviorRelay(value: UserDefaultsManager.shared.getRecent())
         let searchEditingState = BehaviorRelay(value: true)
         let searchText = PublishRelay<String>()
+        let errorMessage = PublishRelay<String>()
         
         input.searchButtonTap
             .throttle(.seconds(1), scheduler: MainScheduler.instance)
             .withLatestFrom(input.searchText.orEmpty)
             .do { UserDefaultsManager.shared.saveRecent($0) }
             .flatMap { SearchAPIManager.shared.fetchAppData(api: .search(query: $0)) }
-            .subscribe(with: self) { owner, value in
-                appList.accept(value.results)
-                let current = UserDefaultsManager.shared.getRecent()
-                recentList.accept(current)
+            .subscribe(with: self) { owner, result in
+                switch result {
+                case .success(let data):
+                    appList.accept(data.results)
+                    let current = UserDefaultsManager.shared.getRecent()
+                    recentList.accept(current)
+                case .failure(let error):
+                    errorMessage.accept(error.localizedDescription)
+                }
             }
             .disposed(by: disposeBag)
 
@@ -58,8 +75,13 @@ final class SearchViewModel: CommonViewModel {
                 searchEditingState.accept(true)
             })
             .flatMapLatest { SearchAPIManager.shared.fetchAppData(api: .search(query: $0)) }
-            .subscribe(with: self) { owner, value in
-                appList.accept(value.results)
+            .subscribe(with: self) { owner, result in
+                switch result {
+                case .success(let data):
+                    appList.accept(data.results)
+                case .failure(let error):
+                    errorMessage.accept(error.localizedDescription)
+                }
             }
             .disposed(by: disposeBag)
         
@@ -83,9 +105,22 @@ final class SearchViewModel: CommonViewModel {
             }
             .disposed(by: disposeBag)
         
+        input.appData
+            .subscribe(with: self) { owner, data in
+                let appInfo = AppInfo(title: data.trackName, iconImage: data.artworkUrl512, regDate: Date())
+                do {
+                    try owner.repository?.createItem(appInfo)
+                } catch {
+                    print(error)
+                }
+            }
+            .disposed(by: disposeBag)
+        
         return Output(appList: appList,
                       recentList: recentList,
                       searchEditingState: searchEditingState,
-                      searchText: searchText)
+                      searchText: searchText, 
+                      errorMessage: errorMessage
+        )
     }
 }

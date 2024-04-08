@@ -33,16 +33,19 @@ final class SearchViewController: BaseViewController {
         navigationItem.searchController = mainView.searchController
         navigationItem.title = "검색"
         navigationController?.navigationBar.prefersLargeTitles = true // Large title
-        //definesPresentationContext = true
     }
     
     private func bind() {
+        
+        let appData = PublishSubject<AppResult>()
         
         let input = SearchViewModel.Input(searchText: mainView.searchController.searchBar.rx.text,
                                           searchButtonTap: mainView.searchController.searchBar.rx.searchButtonClicked,
                                           searchTextDidBeginEditing: mainView.searchController.searchBar.rx.textDidBeginEditing,
                                           searchTextDidEndEditing: mainView.searchController.searchBar.rx.textDidEndEditing,
-                                          recentCellTap: mainView.recentTableView.rx.modelSelected(String.self))
+                                          recentCellTap: mainView.recentTableView.rx.modelSelected(String.self),
+                                          appData: appData
+        )
         
         let output = viewModel.transform(input: input)
         
@@ -50,6 +53,13 @@ final class SearchViewController: BaseViewController {
             .bind(to: mainView.searchTableView.rx.items(cellIdentifier: SearchTableViewCell.identifier,
                                                   cellType: SearchTableViewCell.self)) { row, element, cell in
                 cell.updateCell(element)
+                
+                cell.downloadButton.rx.tap
+                    .map { element }
+                    .subscribe(with: self) { owner, data in
+                        appData.onNext(data)
+                    }
+                    .disposed(by: cell.disposeBag)
             }
             .disposed(by: disposeBag)
         
